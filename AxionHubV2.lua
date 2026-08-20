@@ -1,25 +1,26 @@
 --[[
-    AXION BLOX FRUITS HUB  v2.0
+    AXION BLOX FRUITS HUB  v2.1
     Keyless • Mobile • Gold/Black
+    Farm fixed - no more freeze
     Made exclusively for Axion
 ]]
 
 if not game:IsLoaded() then game.Loaded:Wait() end
-repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character
+repeat task.wait() until game:GetService("Players").LocalPlayer
 
-local Players           = game:GetService("Players")
-local LocalPlayer       = Players.LocalPlayer
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService        = game:GetService("RunService")
-local TweenService      = game:GetService("TweenService")
-local Workspace         = game:GetService("Workspace")
-local VirtualUser       = game:GetService("VirtualUser")
-local HttpService       = game:GetService("HttpService")
-local CoreGui           = game:GetService("CoreGui")
-local TeleportService   = game:GetService("TeleportService")
-local UserInputService  = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local TeleportService = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local StarterGui        = game:GetService("StarterGui")
+local StarterGui = game:GetService("StarterGui")
+local RunService = game:GetService("RunService")
 
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
@@ -34,8 +35,8 @@ local DefaultSettings = {
     BringMobs = true,
     FastAttack = true,
     AutoSkill = true,
-    FarmDistance = 25,
-    TweenSpeed = 180,
+    FarmDistance = 20,
+    TweenSpeed = 220,
     AutoQuest = true,
     SelectedWeapon = "Melee",
     AutoChest = false,
@@ -56,10 +57,7 @@ local DefaultSettings = {
     ESPFruits = false,
     ESPMobs = false,
     ESPDistance = true,
-    Team = "Pirates",
-    SeaProgress = true,
     Notify = true,
-    MobileOptimized = true,
 }
 
 getgenv().AxionSettings = getgenv().AxionSettings or DefaultSettings
@@ -70,9 +68,7 @@ end
 
 local function SaveConfig()
     pcall(function()
-        if writefile then
-            writefile(SAVE_KEY .. ".json", HttpService:JSONEncode(S))
-        end
+        if writefile then writefile(SAVE_KEY .. ".json", HttpService:JSONEncode(S)) end
     end)
 end
 
@@ -80,23 +76,16 @@ local function LoadConfig()
     pcall(function()
         if isfile and isfile(SAVE_KEY .. ".json") then
             local data = HttpService:JSONDecode(readfile(SAVE_KEY .. ".json"))
-            for k, v in pairs(data) do
-                if S[k] ~= nil then S[k] = v end
-            end
+            for k, v in pairs(data) do if S[k] ~= nil then S[k] = v end end
         end
     end)
 end
-
 LoadConfig()
 
 local function Notify(title, text, dur)
     if not S.Notify then return end
     pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title or "Axion Hub",
-            Text = text or "",
-            Duration = dur or 3
-        })
+        StarterGui:SetCore("SendNotification", {Title = title or "Axion Hub", Text = text or "", Duration = dur or 3})
     end)
 end
 
@@ -107,138 +96,190 @@ local function RefreshChar()
     if not Character then return false end
     HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
     Humanoid = Character:FindFirstChild("Humanoid")
-    return HumanoidRootPart ~= nil and Humanoid ~= nil
+    return HumanoidRootPart ~= nil and Humanoid ~= nil and Humanoid.Health > 0
 end
 
 LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
+    task.wait(0.8)
     RefreshChar()
 end)
 RefreshChar()
 
-local function TweenTo(cf_or_pos)
-    if not RefreshChar() then return end
-    local target = typeof(cf_or_pos) == "CFrame" and cf_or_pos or CFrame.new(cf_or_pos)
-    local dist = (HumanoidRootPart.Position - target.Position).Magnitude
-    local t = math.clamp(dist / S.TweenSpeed, 0.15, 8)
-    local tw = TweenService:Create(HumanoidRootPart, TweenInfo.new(t, Enum.EasingStyle.Linear), {CFrame = target})
-    tw:Play()
-    tw.Completed:Wait()
+-- Noclip while farming
+local noclipConn
+local function SetNoclip(on)
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    if on then
+        noclipConn = RunService.Stepped:Connect(function()
+            if Character then
+                for _, p in pairs(Character:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            end
+        end)
+    end
 end
 
 local function EquipWeapon()
     pcall(function()
+        if not RefreshChar() then return end
         local bp = LocalPlayer.Backpack
-        local char = LocalPlayer.Character
-        if not char then return end
         local tool
         if S.SelectedWeapon == "Melee" then
             for _, t in pairs(bp:GetChildren()) do
-                if t:IsA("Tool") and (t.ToolTip == "Melee" or t.Name:find("Combat") or t.Name:find("Dark") or t.Name:find("God") or t.Name:find("Super") or t.Name:find("Electric") or t.Name:find("Water") or t.Name:find("Death") or t.Name:find("Shark") or t.Name:find("Dragon") or t.Name:find("Sanguine")) then
-                    tool = t
-                    break
+                if t:IsA("Tool") and (t.ToolTip == "Melee" or tostring(t.ToolTip):find("Melee")) then tool = t break end
+            end
+            if not tool then
+                for _, t in pairs(bp:GetChildren()) do
+                    if t:IsA("Tool") and not t.Name:find("Fruit") and not (t.ToolTip == "Sword" or t.ToolTip == "Gun" or t.ToolTip == "Blox Fruit") then tool = t break end
                 end
             end
         elseif S.SelectedWeapon == "Sword" then
             for _, t in pairs(bp:GetChildren()) do
-                if t:IsA("Tool") and t.ToolTip == "Sword" then
-                    tool = t
-                    break
-                end
+                if t:IsA("Tool") and t.ToolTip == "Sword" then tool = t break end
             end
         elseif S.SelectedWeapon == "Fruit" then
             for _, t in pairs(bp:GetChildren()) do
-                if t:IsA("Tool") and (t.ToolTip == "Blox Fruit" or t.Name:find("Fruit")) then
-                    tool = t
-                    break
-                end
+                if t:IsA("Tool") and (t.ToolTip == "Blox Fruit" or t.Name:find("Fruit") or t.Name:find("Buddha") or t.Name:find("Budha")) then tool = t break end
+            end
+        end
+        -- also check character already equipped
+        if not tool then
+            for _, t in pairs(Character:GetChildren()) do
+                if t:IsA("Tool") then return end
             end
         end
         if tool then Humanoid:EquipTool(tool) end
     end)
 end
 
+local lastAttack = 0
 local function FastAttack()
     if not S.FastAttack then return end
+    if tick() - lastAttack < 0.12 then return end
+    lastAttack = tick()
     pcall(function()
+        local tool = Character and Character:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate()
+        end
         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-        task.wait(0.03)
+        task.wait(0.02)
         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
     end)
 end
 
+local lastSkill = 0
 local function UseSkills()
     if not S.AutoSkill then return end
+    if tick() - lastSkill < 1.2 then return end
+    lastSkill = tick()
     pcall(function()
-        for _, key in ipairs({"Z", "X", "C", "V", "F"}) do
+        for _, key in ipairs({"Z", "X", "C"}) do
             VirtualInputManager:SendKeyEvent(true, key, false, game)
-            task.wait(0.05)
+            task.wait(0.04)
             VirtualInputManager:SendKeyEvent(false, key, false, game)
-            task.wait(0.08)
+            task.wait(0.06)
         end
     end)
 end
 
-local function GetNearestEnemy(maxDist)
-    maxDist = maxDist or 400
-    local nearest, best = nil, maxDist
-    local enemies = Workspace:FindFirstChild("Enemies")
-    if not enemies then return nil end
-    for _, mob in pairs(enemies:GetChildren()) do
-        local hum = mob:FindFirstChild("Humanoid")
-        local hrp = mob:FindFirstChild("HumanoidRootPart")
-        if hum and hum.Health > 0 and hrp then
-            local d = (HumanoidRootPart.Position - hrp.Position).Magnitude
-            if d < best then
-                best = d
-                nearest = mob
+local function GetNearestEnemy()
+    local nearest, best = nil, 500
+    local folders = {}
+    local e1 = Workspace:FindFirstChild("Enemies")
+    if e1 then table.insert(folders, e1) end
+    -- some versions use different folders
+    for _, child in pairs(Workspace:GetChildren()) do
+        if child.Name == "Enemies" or child.Name == "NPCs" or child.Name == "Mobs" then
+            table.insert(folders, child)
+        end
+    end
+    for _, folder in pairs(folders) do
+        for _, mob in pairs(folder:GetChildren()) do
+            local hum = mob:FindFirstChild("Humanoid")
+            local hrp = mob:FindFirstChild("HumanoidRootPart") or mob:FindFirstChild("UpperTorso") or mob:FindFirstChild("Torso")
+            if hum and hum.Health > 0 and hrp and RefreshChar() then
+                local d = (HumanoidRootPart.Position - hrp.Position).Magnitude
+                if d < best then
+                    best = d
+                    nearest = mob
+                end
             end
         end
     end
     return nearest
 end
 
+-- MAIN FARM LOOP - fixed, non-blocking
+local farmTarget = nil
 task.spawn(function()
     while true do
-        task.wait(0.25)
-        if S.AutoFarm and RefreshChar() then
-            pcall(function()
-                EquipWeapon()
-                local mob = GetNearestEnemy()
-                if mob and mob:FindFirstChild("HumanoidRootPart") then
-                    local hrp = mob.HumanoidRootPart
+        task.wait(0.15)
+        if not S.AutoFarm then
+            SetNoclip(false)
+            farmTarget = nil
+            continue
+        end
+        if not RefreshChar() then continue end
+
+        SetNoclip(true)
+        EquipWeapon()
+
+        local mob = GetNearestEnemy()
+        if mob then
+            farmTarget = mob
+            local hrp = mob:FindFirstChild("HumanoidRootPart") or mob:FindFirstChild("UpperTorso") or mob:FindFirstChild("Torso")
+            if hrp then
+                pcall(function()
                     if S.BringMobs then
-                        hrp.CFrame = HumanoidRootPart.CFrame * CFrame.new(0, 0, -S.FarmDistance)
+                        -- soft bring - don't teleport too hard
+                        local offset = HumanoidRootPart.CFrame.LookVector * -S.FarmDistance
+                        hrp.CFrame = CFrame.new(HumanoidRootPart.Position + offset)
                         hrp.CanCollide = false
-                        hrp.Size = Vector3.new(2, 2, 2)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
                     end
-                    HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 0, S.FarmDistance)
-                    FastAttack()
-                    if math.random() < 0.35 then UseSkills() end
-                end
-            end)
+                    -- stand in front of mob, not freeze
+                    local behind = hrp.CFrame * CFrame.new(0, 0, S.FarmDistance)
+                    HumanoidRootPart.CFrame = CFrame.new(behind.Position, hrp.Position)
+                    HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                end)
+                FastAttack()
+                if math.random() < 0.25 then UseSkills() end
+            end
+        else
+            farmTarget = nil
         end
     end
 end)
 
+-- keep velocity zero while farming so character doesn't bounce
+RunService.Heartbeat:Connect(function()
+    if S.AutoFarm and RefreshChar() and farmTarget then
+        pcall(function()
+            HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end)
+    end
+end)
+
+-- Chest (non-blocking style)
 task.spawn(function()
     while true do
-        task.wait(1.2)
-        if S.AutoChest and RefreshChar() then
+        task.wait(1.5)
+        if S.AutoChest and RefreshChar() and not S.AutoFarm then
             pcall(function()
                 for _, obj in pairs(Workspace:GetDescendants()) do
-                    if not S.AutoChest then break end
-                    local name = obj.Name:lower()
-                    if name:find("chest") then
+                    if not S.AutoChest or S.AutoFarm then break end
+                    if obj.Name:lower():find("chest") then
                         local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
                         if part then
-                            TweenTo(part.Position + Vector3.new(0, 4, 0))
-                            task.wait(0.4)
+                            HumanoidRootPart.CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0))
+                            task.wait(0.35)
                             pcall(function()
                                 firetouchinterest(HumanoidRootPart, part, 0)
                                 firetouchinterest(HumanoidRootPart, part, 1)
                             end)
-                            task.wait(0.3)
                         end
                     end
                 end
@@ -256,8 +297,8 @@ task.spawn(function()
                     if obj.Name:find("Fruit") or (obj:IsA("Tool") and obj.Name:find("Fruit")) then
                         local part = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
                         if part then
-                            TweenTo(part.Position)
-                            task.wait(0.6)
+                            HumanoidRootPart.CFrame = CFrame.new(part.Position)
+                            task.wait(0.5)
                         end
                     end
                 end
@@ -270,9 +311,7 @@ task.spawn(function()
     while true do
         task.wait(6)
         if S.AutoSpin then
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy")
-            end)
+            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy") end)
         end
     end
 end)
@@ -302,7 +341,7 @@ task.spawn(function()
             pcall(function()
                 local race = LocalPlayer.Data and LocalPlayer.Data.Race and LocalPlayer.Data.Race.Value
                 if race and race ~= S.SelectedRace then
-                    if S.SelectedRace == "Human" or S.SelectedRace == "Mink" or S.SelectedRace == "Fishman" or S.SelectedRace == "Skypiean" then
+                    if table.find({"Human", "Mink", "Fishman", "Skypiean"}, S.SelectedRace) then
                         Notify("Race", "Tentando " .. S.SelectedRace)
                         ReplicatedStorage.Remotes.CommF_:InvokeServer("Race Reroll")
                     end
@@ -312,6 +351,7 @@ task.spawn(function()
     end
 end)
 
+-- ESP
 local ESPFolder = Instance.new("Folder")
 ESPFolder.Name = "AxionESP"
 pcall(function() ESPFolder.Parent = CoreGui end)
@@ -343,15 +383,14 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(1.4)
+        task.wait(1.5)
         ClearESP()
         if not RefreshChar() then continue end
         if S.ESPPlayers then
             for _, plr in pairs(Players:GetPlayers()) do
                 if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
                     local dist = math.floor((HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).Magnitude)
-                    local txt = S.ESPDistance and (plr.Name .. " [" .. dist .. "]") or plr.Name
-                    MakeESP(plr.Character.HumanoidRootPart, txt, Color3.fromRGB(100, 180, 255))
+                    MakeESP(plr.Character.HumanoidRootPart, S.ESPDistance and (plr.Name .. " [" .. dist .. "]") or plr.Name, Color3.fromRGB(100, 180, 255))
                 end
             end
         end
@@ -386,7 +425,7 @@ task.spawn(function()
     end
 end)
 
--- UI BLACK + GOLD MOBILE
+-- UI
 local GOLD = Color3.fromRGB(212, 175, 55)
 local GOLD_DARK = Color3.fromRGB(160, 125, 30)
 local BG = Color3.fromRGB(12, 12, 14)
@@ -411,26 +450,18 @@ Main.BackgroundColor3 = BG
 Main.BorderSizePixel = 0
 Main.Active = true
 Main.Parent = ScreenGui
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
-MainCorner.Parent = Main
-
-local MainStroke = Instance.new("UIStroke")
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+local MainStroke = Instance.new("UIStroke", Main)
 MainStroke.Color = GOLD
 MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.3
-MainStroke.Parent = Main
 
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 42)
 TitleBar.BackgroundColor3 = BG2
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = Main
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
-TitleCorner.Parent = TitleBar
-
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 12)
 local TitleFix = Instance.new("Frame")
 TitleFix.Size = UDim2.new(1, 0, 0, 14)
 TitleFix.Position = UDim2.new(0, 0, 1, -14)
@@ -442,10 +473,10 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -80, 1, 0)
 TitleLabel.Position = UDim2.new(0, 14, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "AXION  •  BLOX FRUITS"
+TitleLabel.Text = "AXION  •  v2.1  FARM FIX"
 TitleLabel.TextColor3 = GOLD
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 15
+TitleLabel.TextSize = 14
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
@@ -458,13 +489,8 @@ CloseBtn.TextColor3 = Color3.new(1,1,1)
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 18
 CloseBtn.Parent = TitleBar
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseBtn
-CloseBtn.MouseButton1Click:Connect(function()
-    SaveConfig()
-    ScreenGui:Destroy()
-end)
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+CloseBtn.MouseButton1Click:Connect(function() SaveConfig() ScreenGui:Destroy() end)
 
 local MinBtn = Instance.new("TextButton")
 MinBtn.Size = UDim2.new(0, 28, 0, 28)
@@ -475,10 +501,7 @@ MinBtn.TextColor3 = GOLD
 MinBtn.Font = Enum.Font.GothamBold
 MinBtn.TextSize = 18
 MinBtn.Parent = TitleBar
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 6)
-MinCorner.Parent = MinBtn
-
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
 local minimized = false
 MinBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
@@ -509,9 +532,7 @@ Side.Position = UDim2.new(0, 6, 0, 48)
 Side.BackgroundColor3 = BG2
 Side.BorderSizePixel = 0
 Side.Parent = Main
-local SideCorner = Instance.new("UICorner")
-SideCorner.CornerRadius = UDim.new(0, 8)
-SideCorner.Parent = Side
+Instance.new("UICorner", Side).CornerRadius = UDim.new(0, 8)
 
 local Content = Instance.new("ScrollingFrame")
 Content.Name = "Content"
@@ -524,15 +545,12 @@ Content.ScrollBarImageColor3 = GOLD
 Content.CanvasSize = UDim2.new(0, 0, 0, 0)
 Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Content.Parent = Main
-local ContentCorner = Instance.new("UICorner")
-ContentCorner.CornerRadius = UDim.new(0, 8)
-ContentCorner.Parent = Content
+Instance.new("UICorner", Content).CornerRadius = UDim.new(0, 8)
 
 local List = Instance.new("UIListLayout")
 List.Padding = UDim.new(0, 6)
 List.SortOrder = Enum.SortOrder.LayoutOrder
 List.Parent = Content
-
 local Pad = Instance.new("UIPadding")
 Pad.PaddingTop = UDim.new(0, 8)
 Pad.PaddingLeft = UDim.new(0, 8)
@@ -558,16 +576,13 @@ local function Section(title)
     f.Parent = Content
 end
 
-local function Toggle(text, key, callback)
+local function Toggle(text, key)
     local f = Instance.new("Frame")
     f.Size = UDim2.new(1, 0, 0, 36)
     f.BackgroundColor3 = BG3
     f.BorderSizePixel = 0
     f.Parent = Content
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 7)
-    c.Parent = f
-
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 7)
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -70, 1, 0)
     lbl.Position = UDim2.new(0, 10, 0, 0)
@@ -578,7 +593,6 @@ local function Toggle(text, key, callback)
     lbl.TextSize = 13
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = f
-
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 52, 0, 24)
     btn.Position = UDim2.new(1, -60, 0.5, -12)
@@ -588,17 +602,13 @@ local function Toggle(text, key, callback)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
     btn.Parent = f
-    local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(0, 6)
-    bc.Parent = btn
-
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     btn.MouseButton1Click:Connect(function()
         S[key] = not S[key]
         btn.BackgroundColor3 = S[key] and GOLD or Color3.fromRGB(50, 50, 55)
         btn.Text = S[key] and "ON" or "OFF"
         btn.TextColor3 = S[key] and Color3.fromRGB(20, 15, 5) or MUTED
         SaveConfig()
-        if callback then callback(S[key]) end
         Notify("Axion", text .. (S[key] and " ON" or " OFF"), 2)
     end)
 end
@@ -609,10 +619,7 @@ local function Dropdown(text, key, options)
     f.BackgroundColor3 = BG3
     f.BorderSizePixel = 0
     f.Parent = Content
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 7)
-    c.Parent = f
-
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 7)
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.42, 0, 1, 0)
     lbl.Position = UDim2.new(0, 10, 0, 0)
@@ -623,7 +630,6 @@ local function Dropdown(text, key, options)
     lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = f
-
     local idx = table.find(options, S[key]) or 1
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.52, -8, 0, 26)
@@ -634,10 +640,7 @@ local function Dropdown(text, key, options)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
     btn.Parent = f
-    local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(0, 6)
-    bc.Parent = btn
-
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     btn.MouseButton1Click:Connect(function()
         idx = idx % #options + 1
         S[key] = options[idx]
@@ -656,17 +659,12 @@ local function ActionBtn(text, callback)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 13
     btn.Parent = Content
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 7)
-    c.Parent = btn
-    local stroke = Instance.new("UIStroke")
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+    local stroke = Instance.new("UIStroke", btn)
     stroke.Color = GOLD
     stroke.Thickness = 1
     stroke.Transparency = 0.4
-    stroke.Parent = btn
-    btn.MouseButton1Click:Connect(function()
-        if callback then callback() end
-    end)
+    btn.MouseButton1Click:Connect(function() if callback then callback() end end)
 end
 
 local tabs = {
@@ -677,33 +675,22 @@ local tabs = {
     {Name = "Stats", Icon = "S"},
     {Name = "Misc", Icon = "M"},
 }
-
-local currentTab = "Farm"
 local tabButtons = {}
 
 local function LoadTab(name)
-    currentTab = name
     ClearContent()
-    for _, b in pairs(tabButtons) do
-        b.BackgroundColor3 = BG3
-        b.TextColor3 = MUTED
-    end
-    if tabButtons[name] then
-        tabButtons[name].BackgroundColor3 = GOLD_DARK
-        tabButtons[name].TextColor3 = GOLD
-    end
+    for _, b in pairs(tabButtons) do b.BackgroundColor3 = BG3 b.TextColor3 = MUTED end
+    if tabButtons[name] then tabButtons[name].BackgroundColor3 = GOLD_DARK tabButtons[name].TextColor3 = GOLD end
 
     if name == "Farm" then
-        Section("AUTO FARM")
+        Section("AUTO FARM v2.1")
         Toggle("Auto Farm Level", "AutoFarm")
-        Dropdown("Method", "FarmMethod", {"Nearest", "Quest", "Boss"})
         Dropdown("Weapon", "SelectedWeapon", {"Melee", "Sword", "Fruit"})
         Toggle("Bring Mobs", "BringMobs")
         Toggle("Fast Attack", "FastAttack")
-        Toggle("Auto Skill (Z/X/C/V)", "AutoSkill")
-        Toggle("Auto Quest", "AutoQuest")
+        Toggle("Auto Skill", "AutoSkill")
         Section("CHEST")
-        Toggle("Auto Chest Farm", "AutoChest")
+        Toggle("Auto Chest (farm off)", "AutoChest")
     elseif name == "ESP" then
         Section("ESP")
         Toggle("Players", "ESPPlayers")
@@ -712,12 +699,12 @@ local function LoadTab(name)
         Toggle("Mobs", "ESPMobs")
         Toggle("Show Distance", "ESPDistance")
     elseif name == "Race" then
-        Section("RACE (Human focus)")
+        Section("RACE")
         Dropdown("Target Race", "SelectedRace", {"Human", "Mink", "Fishman", "Skypiean", "Cyborg", "Ghoul"})
-        Toggle("Auto Race System", "AutoRace")
+        Toggle("Auto Race", "AutoRace")
         Toggle("Auto Get if Missing", "RaceAutoGet")
         ActionBtn("Force Race Reroll", function()
-            Notify("Race", "Reroll enviado (precisa fragments)")
+            Notify("Race", "Reroll enviado")
             pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Race Reroll") end)
         end)
     elseif name == "Fruit" then
@@ -726,7 +713,7 @@ local function LoadTab(name)
         Toggle("Auto Spin", "AutoSpin")
         Toggle("Prefer Buddha", "PreferBuddha")
         ActionBtn("Force Spin Now", function()
-            Notify("Fruit", "Spin enviado")
+            Notify("Fruit", "Spin")
             pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy") end)
         end)
     elseif name == "Stats" then
@@ -740,21 +727,15 @@ local function LoadTab(name)
     elseif name == "Misc" then
         Section("MISC")
         Toggle("Notifications", "Notify")
-        ActionBtn("Save Config Now", function()
-            SaveConfig()
-            Notify("Axion", "Config salva")
-        end)
+        ActionBtn("Save Config", function() SaveConfig() Notify("Axion", "Salvo") end)
         ActionBtn("Server Hop", function()
-            Notify("Misc", "Server hop...")
+            Notify("Misc", "Hop...")
             pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
         end)
         ActionBtn("Rejoin", function()
             TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
         end)
-        ActionBtn("Destroy Hub", function()
-            SaveConfig()
-            ScreenGui:Destroy()
-        end)
+        ActionBtn("Destroy Hub", function() SaveConfig() ScreenGui:Destroy() end)
     end
 end
 
@@ -768,26 +749,12 @@ for i, tab in ipairs(tabs) do
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
     btn.Parent = Side
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 7)
-    c.Parent = btn
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
     tabButtons[tab.Name] = btn
-    btn.MouseButton1Click:Connect(function()
-        LoadTab(tab.Name)
-    end)
+    btn.MouseButton1Click:Connect(function() LoadTab(tab.Name) end)
 end
 
 LoadTab("Farm")
 
-task.spawn(function()
-    while ScreenGui.Parent do
-        for i = 0, 1, 0.02 do
-            if not ScreenGui.Parent then break end
-            TitleLabel.TextTransparency = 0.15 + 0.15 * math.sin(i * math.pi * 2)
-            task.wait(0.04)
-        end
-    end
-end)
-
-Notify("Axion Hub v2", "Carregado • Black & Gold • Keyless", 4)
-print("[Axion] Blox Fruits Hub v2.0 loaded | Keyless | Mobile optimized")
+Notify("Axion Hub v2.1", "Farm consertado • sem trava", 4)
+print("[Axion] Hub v2.1 Farm Fix loaded")
